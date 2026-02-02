@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jonsheet</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- Top Bar -->
+    <!-- Top Bar with Placeholder for Editor Controls -->
+    <!-- Top Bar with Placeholder for Editor Controls -->
+    <div class="admin-bar">
+        <div class="logo">Jonsheet (Admin)</div>
+        <div class="controls">
+            <!-- Controls injected by editor.js -->
+            <a href="#" id="jump-sheet">Jump to Sheet ↗</a>
+        </div>
+    </div>
+
+    <!-- Main Sheet Area -->
+    <div class="scroll-container">
+        <div class="sheet-wrapper">
+            <img src="sheet.jpeg" alt="Sheet Reference" class="sheet-bg" id="sheet-bg">
+
+            <!-- SVG Overlay -->
+            <svg class="grid-overlay" id="grid-svg" viewBox="0 0 4284 5712" preserveAspectRatio="none">
+            </svg>
+        </div>
+    </div>
+
+    <script src="grid-data.js"></script>
+    <script src="editor.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
