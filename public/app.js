@@ -25,19 +25,107 @@ let checks = JSON.parse(localStorage.getItem('jonsheet_checks')) || {};
 // Admin: Uses localStorage to save work-in-progress, or falls back to GRID_DATA
 let cellParams = {};
 
+// Zoom State
+let currentZoom = 1.0; // 1.0 = 100% of Viewport
+const ZOOM_STEP = 0.1;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 5.0; // 500% Zoom (Good for mobile)
+
 function init() {
     console.log("Initializing Jonsheet Core...");
+
+    // Attach Zoom Listeners (Buttons)
+    const btnIn = document.getElementById('btn-zoom-in');
+    const btnOut = document.getElementById('btn-zoom-out');
+    if (btnIn && btnOut) {
+        btnIn.addEventListener('click', () => applyZoom(ZOOM_STEP));
+        btnOut.addEventListener('click', () => applyZoom(-ZOOM_STEP));
+    }
+
+    // Modal Listener
+    const modal = document.getElementById('welcome-modal');
+    const btnClose = document.getElementById('btn-close-modal');
+    if (modal && btnClose) {
+        btnClose.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+    }
+
+    // Attach Zoom Listeners (Trackpad Pinch)
+    const container = document.querySelector('.scroll-container');
+    if (container) {
+        container.addEventListener('wheel', (e) => {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                // Normalize delta. Trackpads can send float deltaY.
+                // Negative deltaY = Scrolling Up (Pushing away) = Zoom IN in most apps
+                // Positive deltaY = Scrolling Down (Pulling in) = Zoom OUT
+                const zoomFactor = -e.deltaY * 0.005;
+                applyZoom(zoomFactor);
+            }
+        }, { passive: false }); // Passive false needed to preventDefault
+    }
+
+    // Panning State
+    let isPanning = false;
+    let startX, startY, scrollLeft, scrollTop;
+    const container = document.querySelector('.scroll-container');
+
+    if (container) {
+        container.addEventListener('mousedown', (e) => {
+            // In Admin mode, don't pan if we are clicking a cell (dragging logic is handled elsewhere)
+            // But we can check if default prevented?
+            // Actually, admin drag calls startDrag.
+            if (e.defaultPrevented) return;
+
+            // Check if we are interacting with a UI control (like zoom buttons if they were inside, but they are fixed outside)
+            // If dragging checks in admin mode, stop.
+            if (window.isEditMode && e.target.closest('g')) return;
+
+            isPanning = true;
+            container.classList.add('active'); // CSS for grabbing cursor
+            startX = e.pageX - container.offsetLeft;
+            startY = e.pageY - container.offsetTop;
+            scrollLeft = container.scrollLeft;
+            scrollTop = container.scrollTop;
+        });
+
+        container.addEventListener('mouseleave', () => {
+            isPanning = false;
+            container.classList.remove('active');
+        });
+
+        container.addEventListener('mouseup', () => {
+            // We need to differentiate click vs drag for the 'click' handlers on cells?
+            // We'll use a globally accessible 'wasPanning' flag or time threshold if needed.
+            // But usually the click event fires after mouseup.
+            // Let's set a timeout to clear isPanning so click handlers can check it?
+            // Actually, simple capture:
+            setTimeout(() => {
+                isPanning = false;
+                container.classList.remove('active');
+            }, 0);
+        });
+
+        container.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            e.preventDefault();
+            const x = e.pageX - container.offsetLeft;
+            const y = e.pageY - container.offsetTop;
+            const walkX = (x - startX) * 1; // Scroll speed 1:1
+            const walkY = (y - startY) * 1;
+            container.scrollLeft = scrollLeft - walkX;
+            container.scrollTop = scrollTop - walkY;
+        });
+    }
 
     // Determine source of truth for Grid Geometry
     const storedParams = localStorage.getItem('jonsheet_cell_params');
 
     if (typeof GRID_DATA !== 'undefined' && GRID_DATA) {
         // Production: Use the hardcoded export
-        // If we are in Admin mode, we might want to OVERRIDE this with local storage if it exists?
-        // Or should Admin always load from LocalStorage?
         if (window.isEditMode !== undefined) {
-            // We are likely in Admin/Editor context (editor.js loaded)
-            // Check if we have local work
+            // Admin context
             if (storedParams) {
                 cellParams = JSON.parse(storedParams);
                 console.log("Loaded Geometry from LocalStorage (Draft)");
@@ -51,7 +139,7 @@ function init() {
             console.log("Loaded Geometry from GRID_DATA (Prod)");
         }
     } else {
-        // No GRID_DATA (First run or local dev without export)
+        // No GRID_DATA
         if (storedParams) {
             cellParams = JSON.parse(storedParams);
             console.log("Loaded Geometry from LocalStorage (No Export Found)");
@@ -63,6 +151,16 @@ function init() {
 
     // Initial Render
     render();
+}
+
+function applyZoom(delta) {
+    currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom + delta));
+    const wrapper = document.querySelector('.sheet-wrapper');
+    if (wrapper) {
+        // Percentage based width relative to viewport
+        wrapper.style.width = `${Math.round(currentZoom * 100)}%`;
+        // wrapper.style.transform = ''; // Not needed anymore
+    }
 }
 
 function createDefaultParams() {
@@ -130,12 +228,17 @@ function render() {
             // GAME MODE
             if (p.locked) {
                 // Locked cells are non-interactive.
-                // UNLESS it is a Permanent Check? No, even then, user can't change it.
                 g.style.cursor = "default";
             } else {
                 g.style.cursor = "pointer";
                 g.onclick = (e) => {
                     e.stopPropagation();
+                    // If we were just panning, DO NOT toggle
+                    // (Strictly speaking, click won't fire if we moved far enough? 
+                    // No, it usually does. We can check container class or a global flag)
+                    const container = document.querySelector('.scroll-container');
+                    if (container && container.classList.contains('active')) return;
+
                     toggleGameCheck(cellId);
                 };
             }
