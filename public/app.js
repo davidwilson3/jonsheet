@@ -1,11 +1,9 @@
 // app.js - Core Game Logic
 
-// Natural Image Dimensions
 const IMG_WIDTH = 4284;
 const IMG_HEIGHT = 5712;
 const ROW_COUNT = 25;
 
-// Metadata
 const COLUMN_DEFS = [
     { id: 'connie', name: 'Connie', checkable: true },
     { id: 'winky', name: 'Winky', checkable: true },
@@ -16,74 +14,71 @@ const COLUMN_DEFS = [
     { id: 'notes', name: 'Notes', checkable: false }
 ];
 
-// STATE
-// User's Progress (Checks they toggled)
-let checks = JSON.parse(localStorage.getItem('jonsheet_checks')) || {};
-
-// Grid Geometry (Positions & Locks)
-// Prod: Uses GRID_DATA from grid-data.js (if valid)
-// Admin: Uses localStorage to save work-in-progress, or falls back to GRID_DATA
+// State
+let checks = {};
+let sheetsReady = false;
 let cellParams = {};
+let isEditing = false;
+let refreshInterval = null;
 
-// Zoom State
-let currentZoom = 1.0; // 1.0 = 100% of Viewport
-const ZOOM_STEP = 0.1;
+// Zoom
+let currentZoom = 1.0;
 const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 5.0; // 500% Zoom (Good for mobile)
+const MAX_ZOOM = 5.0;
 
 function init() {
-    console.log("Initializing Jonsheet Core...");
-
-    // Attach Zoom Listeners (Buttons)
-    const btnIn = document.getElementById('btn-zoom-in');
-    const btnOut = document.getElementById('btn-zoom-out');
-    if (btnIn && btnOut) {
-        btnIn.addEventListener('click', () => applyZoom(ZOOM_STEP));
-        btnOut.addEventListener('click', () => applyZoom(-ZOOM_STEP));
-    }
-
-    // Modal Listener
     const modal = document.getElementById('welcome-modal');
     const btnClose = document.getElementById('btn-close-modal');
-    if (modal && btnClose) {
+    const btnEdit = document.getElementById('btn-edit-mode');
+    const modeIndicator = document.getElementById('mode-indicator');
+
+    if (btnEdit && modal && btnClose) {
+        btnEdit.addEventListener('click', () => {
+            if (!sheetsReady) {
+                showError('Sign in with Google first.');
+                return;
+            }
+
+            if (isEditing) {
+                isEditing = false;
+                btnEdit.textContent = "switch to edit";
+                btnEdit.classList.remove('active');
+                if (modeIndicator) modeIndicator.textContent = "view mode";
+                render();
+            } else {
+                modal.classList.remove('hidden');
+            }
+        });
+
         btnClose.addEventListener('click', () => {
             modal.classList.add('hidden');
+            isEditing = true;
+            btnEdit.textContent = "switch to view";
+            btnEdit.classList.add('active');
+            if (modeIndicator) modeIndicator.textContent = "edit mode";
+            render();
         });
     }
 
-    // Attach Zoom Listeners (Trackpad Pinch)
+    // Zoom (trackpad pinch)
     const container = document.querySelector('.scroll-container');
     if (container) {
         container.addEventListener('wheel', (e) => {
             if (e.ctrlKey) {
                 e.preventDefault();
-                // Normalize delta. Trackpads can send float deltaY.
-                // Negative deltaY = Scrolling Up (Pushing away) = Zoom IN in most apps
-                // Positive deltaY = Scrolling Down (Pulling in) = Zoom OUT
-                const zoomFactor = -e.deltaY * 0.005;
-                applyZoom(zoomFactor);
+                applyZoom(-e.deltaY * 0.005);
             }
-        }, { passive: false }); // Passive false needed to preventDefault
-    }
+        }, { passive: false });
 
-    // Panning State
-    let isPanning = false;
-    let startX, startY, scrollLeft, scrollTop;
-    const container = document.querySelector('.scroll-container');
+        // Panning
+        let isPanning = false;
+        let startX, startY, scrollLeft, scrollTop;
 
-    if (container) {
         container.addEventListener('mousedown', (e) => {
-            // In Admin mode, don't pan if we are clicking a cell (dragging logic is handled elsewhere)
-            // But we can check if default prevented?
-            // Actually, admin drag calls startDrag.
             if (e.defaultPrevented) return;
-
-            // Check if we are interacting with a UI control (like zoom buttons if they were inside, but they are fixed outside)
-            // If dragging checks in admin mode, stop.
             if (window.isEditMode && e.target.closest('g')) return;
 
-            isPanning = true;
-            container.classList.add('active'); // CSS for grabbing cursor
+            isPanning = false;
             startX = e.pageX - container.offsetLeft;
             startY = e.pageY - container.offsetTop;
             scrollLeft = container.scrollLeft;
@@ -96,11 +91,6 @@ function init() {
         });
 
         container.addEventListener('mouseup', () => {
-            // We need to differentiate click vs drag for the 'click' handlers on cells?
-            // We'll use a globally accessible 'wasPanning' flag or time threshold if needed.
-            // But usually the click event fires after mouseup.
-            // Let's set a timeout to clear isPanning so click handlers can check it?
-            // Actually, simple capture:
             setTimeout(() => {
                 isPanning = false;
                 container.classList.remove('active');
@@ -108,58 +98,174 @@ function init() {
         });
 
         container.addEventListener('mousemove', (e) => {
-            if (!isPanning) return;
-            e.preventDefault();
-            const x = e.pageX - container.offsetLeft;
-            const y = e.pageY - container.offsetTop;
-            const walkX = (x - startX) * 1; // Scroll speed 1:1
-            const walkY = (y - startY) * 1;
-            container.scrollLeft = scrollLeft - walkX;
-            container.scrollTop = scrollTop - walkY;
+            if (isPanning) {
+                e.preventDefault();
+                const x = e.pageX - container.offsetLeft;
+                const y = e.pageY - container.offsetTop;
+                container.scrollLeft = scrollLeft - (x - startX);
+                container.scrollTop = scrollTop - (y - startY);
+                return;
+            }
+
+            if (e.buttons === 1) {
+                const x = e.pageX - container.offsetLeft;
+                const y = e.pageY - container.offsetTop;
+                if (Math.abs(x - startX) > 5 || Math.abs(y - startY) > 5) {
+                    isPanning = true;
+                    container.classList.add('active');
+                }
+            }
         });
     }
 
-    // Determine source of truth for Grid Geometry
-    const storedParams = localStorage.getItem('jonsheet_cell_params');
-
+    // Load grid geometry (always use GRID_DATA for production)
     if (typeof GRID_DATA !== 'undefined' && GRID_DATA) {
-        // Production: Use the hardcoded export
-        if (window.isEditMode !== undefined) {
-            // Admin context
-            if (storedParams) {
-                cellParams = JSON.parse(storedParams);
-                console.log("Loaded Geometry from LocalStorage (Draft)");
-            } else {
-                cellParams = GRID_DATA;
-                console.log("Loaded Geometry from GRID_DATA (Base)");
-            }
-        } else {
-            // Pure Production
-            cellParams = GRID_DATA;
-            console.log("Loaded Geometry from GRID_DATA (Prod)");
-        }
+        cellParams = GRID_DATA;
     } else {
-        // No GRID_DATA
-        if (storedParams) {
-            cellParams = JSON.parse(storedParams);
-            console.log("Loaded Geometry from LocalStorage (No Export Found)");
-        } else {
-            cellParams = createDefaultParams();
-            console.log("Created Default Geometry");
-        }
+        cellParams = createDefaultParams();
     }
 
-    // Initial Render
+    // Update jump-to-sheet link
+    const jumpLink = document.getElementById('jump-sheet');
+    if (jumpLink && typeof SHEETS_CONFIG !== 'undefined') {
+        jumpLink.href = SHEETS_CONFIG.sheetUrl;
+    }
+
     render();
+
+    // Initialize Google auth
+    initAuth();
+}
+
+async function onSignedIn() {
+    showLoadingState(true);
+    try {
+        // Fetch user email for display
+        const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (userRes.ok) {
+            const userInfo = await userRes.json();
+            showSignedInUI(userInfo.email);
+        } else {
+            showSignedInUI('signed in');
+        }
+
+        checks = await loadChecksFromSheet();
+        sheetsReady = true;
+        render();
+
+        // Start auto-refresh every 30 seconds
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(refreshFromSheet, 30000);
+    } catch (err) {
+        console.error('Failed to load checks:', err);
+        showError('Failed to load data from Google Sheet.');
+    } finally {
+        showLoadingState(false);
+    }
+}
+
+function onSignedOut() {
+    sheetsReady = false;
+    checks = {};
+    isEditing = false;
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+
+    const btnEdit = document.getElementById('btn-edit-mode');
+    const modeIndicator = document.getElementById('mode-indicator');
+    if (btnEdit) {
+        btnEdit.textContent = "switch to edit";
+        btnEdit.classList.remove('active');
+    }
+    if (modeIndicator) modeIndicator.textContent = "view mode";
+
+    showSignedOutUI();
+    render();
+}
+
+async function refreshFromSheet() {
+    if (!sheetsReady || !accessToken) return;
+    try {
+        checks = await loadChecksFromSheet();
+        render();
+    } catch (err) {
+        console.error('Refresh failed:', err);
+    }
+}
+
+async function toggleGameCheck(cellId) {
+    const colId = cellId.split('_')[0];
+    const colDef = COLUMN_DEFS.find(c => c.id === colId);
+    if (colDef && !colDef.checkable) return;
+    if (!sheetsReady) return;
+
+    // Optimistic update
+    const wasChecked = !!checks[cellId];
+    if (wasChecked) {
+        delete checks[cellId];
+    } else {
+        checks[cellId] = true;
+    }
+    render();
+
+    // Write to sheet
+    try {
+        await writeCheckToSheet(cellId, !wasChecked);
+    } catch (err) {
+        console.error('Failed to write check:', err);
+        showError('Failed to save. Rolling back...');
+        // Rollback
+        if (wasChecked) {
+            checks[cellId] = true;
+        } else {
+            delete checks[cellId];
+        }
+        render();
+    }
+}
+
+function showLoadingState(show) {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.classList.toggle('hidden', !show);
+    }
+}
+
+function showError(msg) {
+    const toast = document.getElementById('error-toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 4000);
+}
+
+function showSignedInUI(email) {
+    const btnSignIn = document.getElementById('btn-sign-in');
+    const userInfo = document.getElementById('user-info');
+    const userEmail = document.getElementById('user-email');
+
+    if (btnSignIn) btnSignIn.classList.add('hidden');
+    if (userInfo) userInfo.classList.remove('hidden');
+    if (userEmail) userEmail.textContent = email || '';
+}
+
+function showSignedOutUI() {
+    const btnSignIn = document.getElementById('btn-sign-in');
+    const userInfo = document.getElementById('user-info');
+
+    if (btnSignIn) btnSignIn.classList.remove('hidden');
+    if (userInfo) userInfo.classList.add('hidden');
 }
 
 function applyZoom(delta) {
     currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom + delta));
     const wrapper = document.querySelector('.sheet-wrapper');
     if (wrapper) {
-        // Percentage based width relative to viewport
         wrapper.style.width = `${Math.round(currentZoom * 100)}%`;
-        // wrapper.style.transform = ''; // Not needed anymore
     }
 }
 
@@ -188,83 +294,59 @@ function render() {
     if (!svg) return;
     svg.innerHTML = '';
 
-    // console.log("Rendering grid. Mode:", (typeof isEditMode !== 'undefined' && isEditMode) ? "EDIT" : "GAME");
+    // Fallback: sync state from DOM if inconsistent
+    const btnEdit = document.getElementById('btn-edit-mode');
+    if (!isEditing && btnEdit && btnEdit.classList.contains('active')) {
+        isEditing = true;
+    }
 
-    // Iterate over cells
+    const adminEditing = (typeof isEditMode !== 'undefined' && isEditMode);
+
     Object.keys(cellParams).forEach(cellId => {
         const p = cellParams[cellId];
         const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
         g.dataset.id = cellId;
         g.setAttribute("transform", `translate(${p.x}, ${p.y})`);
 
-        // Check if we are in Edit Mode (Global var from editor.js)
-        const editing = (typeof isEditMode !== 'undefined' && isEditMode);
-
-        // Interaction Logic
-        if (editing) {
+        // Interaction
+        if (adminEditing) {
             g.style.cursor = "move";
-
-            // Drag Listeners (Delegated to editor.js global)
-            g.onmousedown = (e) => {
-                console.log("MouseDown:", cellId, "startDrag:", !!window.startDrag);
-                if (window.startDrag) window.startDrag(e, cellId);
-            };
+            g.onmousedown = (e) => { if (window.startDrag) window.startDrag(e, cellId); };
             g.ontouchstart = (e) => { if (window.startDrag) window.startDrag(e, cellId); };
-
             g.oncontextmenu = (e) => {
                 e.preventDefault();
-                // We shouldn't call toggleLock directly if it's not defined here?
-                // It's better if app.js exposes a "onCellRightClick" hook?
-                // Or we keep the toggle functions global?
-                // Let's assume editor.js defines toggleLock globally if loaded.
                 if (window.toggleLock) window.toggleLock(cellId);
             };
-
+            g.onclick = (e) => { if (window.onCellClick) window.onCellClick(cellId); };
+        } else if (p.locked) {
+            g.style.cursor = "default";
+        } else if (isEditing && sheetsReady) {
+            g.style.cursor = "pointer";
             g.onclick = (e) => {
-                // editor.js handles drag vs click state
-                if (window.onCellClick) window.onCellClick(cellId);
+                e.stopPropagation();
+                const container = document.querySelector('.scroll-container');
+                if (container && container.classList.contains('active')) return;
+                toggleGameCheck(cellId);
             };
         } else {
-            // GAME MODE
-            if (p.locked) {
-                // Locked cells are non-interactive.
-                g.style.cursor = "default";
-            } else {
-                g.style.cursor = "pointer";
-                g.onclick = (e) => {
-                    e.stopPropagation();
-                    // If we were just panning, DO NOT toggle
-                    // (Strictly speaking, click won't fire if we moved far enough? 
-                    // No, it usually does. We can check container class or a global flag)
-                    const container = document.querySelector('.scroll-container');
-                    if (container && container.classList.contains('active')) return;
-
-                    toggleGameCheck(cellId);
-                };
-            }
+            g.style.cursor = "grab";
         }
 
-        // 1. Visual Box
+        // Cell rect
         const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
         rect.setAttribute("width", p.w);
         rect.setAttribute("height", p.h);
 
-        if (editing) {
-            // EDITOR VISUALS
+        if (adminEditing) {
             let stroke = "cyan";
             let fill = "rgba(0, 255, 255, 0.2)";
 
-            // In Editor, we check `checks` (localStorage draft) to see intended state
-            // If Locked + Checked = Green
-            // If Locked + Unchecked = Red
-            const isSavedCheck = checks[cellId];
-
             if (p.locked) {
-                if (isSavedCheck) {
-                    stroke = "#2ecc71"; // Green
+                if (checks[cellId]) {
+                    stroke = "#2ecc71";
                     fill = "rgba(46, 204, 113, 0.3)";
                 } else {
-                    stroke = "#e74c3c"; // Red
+                    stroke = "#e74c3c";
                     fill = "rgba(231, 76, 60, 0.3)";
                 }
             }
@@ -273,18 +355,13 @@ function render() {
             rect.setAttribute("stroke", stroke);
             rect.setAttribute("stroke-dasharray", "5,5");
         } else {
-            // PROD VISUALS (Invisible Hitbox)
-            rect.setAttribute("fill", "transparent");
+            // Invisible hitbox (fill with 0 opacity to capture clicks)
+            rect.setAttribute("fill", "white");
+            rect.setAttribute("fill-opacity", "0");
         }
         g.appendChild(rect);
 
-
-        // 2. Checkmarks
-        // Logic: Show check if:
-        // A) It is a Permanent Check (p.isPermanent is true OR (AdminMode && checks[cellId] && locked))
-        // B) It is a User Check (checks[cellId] && !locked)
-        // C) It is Editor Ghost (Checkable & Unlocked)
-
+        // Checkmarks
         const colId = cellId.split('_')[0];
         const colDef = COLUMN_DEFS.find(c => c.id === colId);
         const isCheckable = colDef ? colDef.checkable : false;
@@ -293,24 +370,19 @@ function render() {
         let isPermanent = false;
         let isGhost = false;
 
-        if (editing) {
-            if (p.locked) {
-                if (checks[cellId]) {
-                    showCheck = true;
-                    isPermanent = true; // Visual style
-                }
-            } else if (isCheckable) {
+        if (adminEditing) {
+            if (p.locked && checks[cellId]) {
+                showCheck = true;
+                isPermanent = true;
+            } else if (!p.locked && isCheckable) {
                 showCheck = true;
                 if (!checks[cellId]) isGhost = true;
             }
         } else {
-            // GAME MODE
             if (p.isPermanent) {
-                // Baked in permanent check
                 showCheck = true;
                 isPermanent = true;
             } else if (!p.locked && checks[cellId]) {
-                // User check
                 showCheck = true;
             }
         }
@@ -318,21 +390,16 @@ function render() {
         if (showCheck) {
             const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
 
-            // Hash variant
             const hash = cellId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
             const variant = (hash % 2) + 1;
             img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', `check${variant}.png`);
             img.style.display = 'block';
 
-            // Size Logic (Editor vs Prod)
-            let size = 150; // Default
-
-            // Try to load from Config (Prod export)
+            let size = 150;
             if (typeof GRID_CONFIG !== 'undefined' && GRID_CONFIG.checkSize) {
                 size = GRID_CONFIG.checkSize;
             }
-
-            if (editing) {
+            if (adminEditing) {
                 const slider = document.getElementById('slider-size');
                 if (slider) size = parseInt(slider.value) || size;
             }
@@ -343,46 +410,15 @@ function render() {
             img.setAttribute("y", centerY - (size / 2));
             img.setAttribute("width", size);
             img.setAttribute("height", size);
-
-            if (isGhost) {
-                img.style.opacity = "0.7";
-            } else {
-                img.style.opacity = "1.0";
-            }
-
-            // If permanent in Prod, maybe give it a slight tint or just normal?
-            // "Green" border was for Admin. In Prod, it should just look like ink (image).
-            // WAIT - In Prod, if it's permanent, it's ALREADY on the background image (the hand drawing).
-            // So we should NOT render a digital check on top of it, unless we want to "digitize" it?
-            // User said: "you need to know the hardcoded ones to put into the google sheet still".
-            // So we need the DATA. But do we show the IMG?
-            // "make the locked show a lock symbol (meaning they can't be edited), the green can be (Permanent Check)"
-            // If checking "Green" in Admin means "There is ink here", then in Prod we DON'T need to render a check, 
-            // because the ink is there.
-            // BUT for this prototype, maybe we do render it to confirm detection?
-            // Let's hide it if permanent in Prod, assuming background has it.
-            // BUT verify: "checked doesn't matter right, we're starting with all of theme unchecked until i place checks (except for the locked ones that are always locke)"
-
-            if (!editing && isPermanent) {
-                // Don't render image for permanent checks in Prod (Background has it)
-                // Just keep logic for click blocking.
-                // Unless user wants to see "Digitized" state.
-                // "checks arre stilll waaaaaay too big" implies they SEE them.
-                // Let's RENDERING them for now to be safe, high opacity.
-            }
+            img.style.opacity = isGhost ? "0.7" : "1.0";
 
             g.appendChild(img);
         }
 
-        // Lock Icon (Only Editor for now? Or Prod too?)
-        // User: "make the locked show a lock symbol (meaning they can't be edited)"
-        // This implies visual feedback in Prod too if user tries to click?
-        // Or just visible locks on blocked cells?
-        // "Red 🔒 = Blocked".
-        // Let's show lock icon in Editor. In Prod, maybe not needed unless requested.
-        if (editing && p.locked && !checks[cellId]) { // Red state
+        // Lock icon (admin only, locked + unchecked)
+        if (adminEditing && p.locked && !checks[cellId]) {
             const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-            text.textContent = "🔒";
+            text.textContent = "\uD83D\uDD12";
             text.setAttribute("x", p.w / 2);
             text.setAttribute("y", p.h / 2);
             text.setAttribute("dominant-baseline", "central");
@@ -394,23 +430,6 @@ function render() {
 
         svg.appendChild(g);
     });
-}
-
-function toggleGameCheck(cellId) {
-    // Only toggles user checks (not permanent ones)
-    // Check if column is checkable
-    const colId = cellId.split('_')[0];
-    const colDef = COLUMN_DEFS.find(c => c.id === colId);
-    if (colDef && !colDef.checkable) return;
-
-    // Toggle
-    if (checks[cellId]) {
-        delete checks[cellId];
-    } else {
-        checks[cellId] = true;
-    }
-    localStorage.setItem('jonsheet_checks', JSON.stringify(checks));
-    render();
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -6,27 +6,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jonsheet</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
-    <!-- Top Bar -->
-    <!-- Floating Jump Button -->
-    <!-- Floating Jump Button -->
-    <a href="#" id="jump-sheet" class="floating-jump-btn">A Fucking Real Sheet ↗</a>
+    <!-- Sign-in Button (shown when signed out) -->
+    <button id="btn-sign-in" class="floating-sign-in-btn" onclick="signIn()">Sign in with Google</button>
 
-    <!-- Floating Zoom Controls (Bottom Right) -->
-    <div class="zoom-controls">
-        <button id="btn-zoom-out" class="zoom-btn">➖</button>
-        <button id="btn-zoom-in" class="zoom-btn">➕</button>
+    <!-- User Info (shown when signed in) -->
+    <div id="user-info" class="floating-user-info hidden">
+        <span id="user-email"></span>
+        <a href="#" class="sign-out-link" onclick="signOut(); return false;">sign out</a>
     </div>
 
-    <!-- Onboarding Popup -->
-    <div id="welcome-modal" class="modal-overlay">
+    <!-- Floating Jump Button -->
+    <a href="https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit" id="jump-sheet" class="floating-jump-btn">the fucking google sheet &#8599;</a>
+
+    <!-- Mode Indicator (Top Center) -->
+    <div id="mode-indicator" class="mode-text">view mode</div>
+
+    <!-- Floating Edit Button (Top Left) -->
+    <button id="btn-edit-mode" class="floating-edit-btn">switch to edit</button>
+
+    <!-- Warning Popup (Hidden by default) -->
+    <div id="welcome-modal" class="modal-overlay hidden">
         <div class="modal-content">
             <p>click on the FUCKING image to update your status</p>
-            <button id="btn-close-modal">OKAY</button>
+            <p class="subtext">Warning: editing this list also permanently edits the googlesheet too, they're linked</p>
+            <button id="btn-close-modal">fucking ok</button>
         </div>
     </div>
+
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading checks...</div>
+    </div>
+
+    <!-- Error toast -->
+    <div id="error-toast" class="error-toast hidden"></div>
 
     <!-- Main Sheet Area -->
     <div class="scroll-container">
@@ -41,7 +59,9 @@
         </div>
     </div>
 
+    <script src="config.js"></script>
     <script src="grid-data.js"></script>
+    <script src="sheets.js"></script>
     <script src="app.js"></script>
 </body>
 
