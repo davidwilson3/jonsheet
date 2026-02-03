@@ -704,8 +704,7 @@ const GRID_DATA = {
     "y": 3220,
     "w": 340,
     "h": 145,
-    "locked": true,
-    "isPermanent": true
+    "locked": true
   },
   "james_14": {
     "x": 2218,

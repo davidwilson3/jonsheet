@@ -6,21 +6,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jonsheet</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Homemade+Apple&display=swap" rel="stylesheet">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
-    <!-- Sign-in Button (shown when signed out) -->
-    <button id="btn-sign-in" class="floating-sign-in-btn" onclick="signIn()">Sign in with Google</button>
-
-    <!-- User Info (shown when signed in) -->
-    <div id="user-info" class="floating-user-info hidden">
-        <span id="user-email"></span>
-        <a href="#" class="sign-out-link" onclick="signOut(); return false;">sign out</a>
+    <!-- Startup Loading Screen -->
+    <div id="startup-overlay" class="startup-overlay">
+        <div class="loading-spinner"></div>
     </div>
 
-    <!-- Floating Jump Button -->
-    <a href="https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit" id="jump-sheet" class="floating-jump-btn">the fucking google sheet &#8599;</a>
+    <!-- Sign-in Overlay (blocks site until signed in) -->
+    <div id="sign-in-overlay" class="sign-in-overlay hidden">
+        <div class="sign-in-paper">
+            <div class="sign-in-content">
+                <h1>Jonsheet</h1>
+                <button onclick="signIn()" class="sign-in-btn">sign in with google</button>
+                <span class="sign-in-note">you have to fucking do this with your normal gmail or it won't work</span>
+                <div id="homies-list" class="homies-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Right: Sign Out + Jump Button -->
+    <div class="top-right-controls">
+        <div id="user-info" class="floating-user-info hidden">
+            <a href="#" class="sign-out-link" onclick="signOut(); return false;">sign out</a>
+        </div>
+        <a href="https://docs.google.com/spreadsheets/d/1hBTvaqrfAOD28GQor6g1FyP6mUk_dAOoTJPMPb1t5Wg/edit" id="jump-sheet" class="floating-jump-btn">the fucking google sheet &#8599;</a>
+    </div>
 
     <!-- Mode Indicator (Top Center) -->
     <div id="mode-indicator" class="mode-text">view mode</div>
@@ -32,7 +48,7 @@
     <div id="welcome-modal" class="modal-overlay hidden">
         <div class="modal-content">
             <p>click on the FUCKING image to update your status</p>
-            <p class="subtext">Warning: editing this list also permanently edits the googlesheet too, they're linked</p>
+            <p class="subtext">warning: editing this list also permanently edits the googlesheet too, they're linked</p>
             <button id="btn-close-modal">fucking ok</button>
         </div>
     </div>

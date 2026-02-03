@@ -131,6 +131,13 @@ function init() {
         jumpLink.href = SHEETS_CONFIG.sheetUrl;
     }
 
+    // Populate homies list on sign-in page
+    const homiesList = document.getElementById('homies-list');
+    if (homiesList && typeof SHEETS_CONFIG !== 'undefined' && SHEETS_CONFIG.homies) {
+        homiesList.innerHTML = '<div class="homies-label">homies who can see this:</div>' +
+            '<ul>' + SHEETS_CONFIG.homies.map(e => `<li>${e}</li>`).join('') + '</ul>';
+    }
+
     render();
 
     // Initialize Google auth
@@ -140,19 +147,9 @@ function init() {
 async function onSignedIn() {
     showLoadingState(true);
     try {
-        // Fetch user email for display
-        const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (userRes.ok) {
-            const userInfo = await userRes.json();
-            showSignedInUI(userInfo.email);
-        } else {
-            showSignedInUI('signed in');
-        }
-
         checks = await loadChecksFromSheet();
         sheetsReady = true;
+        showSignedInUI();
         render();
 
         // Start auto-refresh every 30 seconds
@@ -160,7 +157,10 @@ async function onSignedIn() {
         refreshInterval = setInterval(refreshFromSheet, 30000);
     } catch (err) {
         console.error('Failed to load checks:', err);
-        showError('Failed to load data from Google Sheet.');
+        // Token is probably expired — clear it and show sign-in
+        localStorage.removeItem('jonsheet_token');
+        accessToken = null;
+        showSignedOutUI();
     } finally {
         showLoadingState(false);
     }
@@ -243,21 +243,26 @@ function showError(msg) {
     setTimeout(() => toast.classList.add('hidden'), 4000);
 }
 
-function showSignedInUI(email) {
-    const btnSignIn = document.getElementById('btn-sign-in');
-    const userInfo = document.getElementById('user-info');
-    const userEmail = document.getElementById('user-email');
+function hideStartupOverlay() {
+    const startup = document.getElementById('startup-overlay');
+    if (startup) startup.classList.add('hidden');
+}
 
-    if (btnSignIn) btnSignIn.classList.add('hidden');
+function showSignedInUI() {
+    hideStartupOverlay();
+    const overlay = document.getElementById('sign-in-overlay');
+    const userInfo = document.getElementById('user-info');
+
+    if (overlay) overlay.classList.add('hidden');
     if (userInfo) userInfo.classList.remove('hidden');
-    if (userEmail) userEmail.textContent = email || '';
 }
 
 function showSignedOutUI() {
-    const btnSignIn = document.getElementById('btn-sign-in');
+    hideStartupOverlay();
+    const overlay = document.getElementById('sign-in-overlay');
     const userInfo = document.getElementById('user-info');
 
-    if (btnSignIn) btnSignIn.classList.remove('hidden');
+    if (overlay) overlay.classList.remove('hidden');
     if (userInfo) userInfo.classList.add('hidden');
 }
 

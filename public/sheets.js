@@ -3,7 +3,7 @@
 let tokenClient = null;
 let accessToken = null;
 
-// Column mapping: column IDs to sheet columns (B=0, C=1, D=2, E=3, F=4, G=5)
+// Column mapping: column IDs to sheet columns (C=0, D=1, E=2, F=3, G=4, H=5)
 const COLUMN_MAP = {
     connie: 0,
     winky: 1,
@@ -13,7 +13,7 @@ const COLUMN_MAP = {
     jhatz: 5
 };
 
-const COLUMN_LETTERS = ['B', 'C', 'D', 'E', 'F', 'G'];
+const COLUMN_LETTERS = ['C', 'D', 'E', 'F', 'G', 'H'];
 const COLUMN_IDS = ['connie', 'winky', 'david', 'james', 'stud', 'jhatz'];
 
 // Convert cell ID (e.g. "connie_0") to sheet reference (e.g. "B2")
@@ -37,8 +37,8 @@ function sheetPosToCellId(rowIndex, colIndex) {
 // Initialize Google Identity Services token client
 function initAuth() {
     if (typeof google === 'undefined' || !google.accounts) {
-        console.error('Google Identity Services not loaded');
-        showError('Google sign-in failed to load. Refresh the page.');
+        // GIS script still loading, retry
+        setTimeout(initAuth, 200);
         return;
     }
 
@@ -49,14 +49,23 @@ function initAuth() {
             if (response.error) {
                 console.error('Auth error:', response.error);
                 showError('Sign-in failed: ' + response.error);
+                showSignedOutUI();
                 return;
             }
             accessToken = response.access_token;
+            localStorage.setItem('jonsheet_token', accessToken);
             onSignedIn();
         },
     });
 
-    showSignedOutUI();
+    // Try reusing saved token by loading sheet data directly
+    const savedToken = localStorage.getItem('jonsheet_token');
+    if (savedToken) {
+        accessToken = savedToken;
+        setTimeout(() => onSignedIn(), 400);
+    } else {
+        setTimeout(() => showSignedOutUI(), 400);
+    }
 }
 
 function signIn() {
@@ -68,6 +77,7 @@ function signIn() {
 }
 
 function signOut() {
+    localStorage.removeItem('jonsheet_token');
     if (accessToken) {
         google.accounts.oauth2.revoke(accessToken, () => {
             accessToken = null;
@@ -119,7 +129,7 @@ async function writeCheckToSheet(cellId, isChecked) {
 
     const body = {
         range: `${sheetName}!${ref}`,
-        values: [[isChecked ? 'TRUE' : '']]
+        values: [[isChecked ? 'yes' : 'no']]
     };
 
     const res = await fetch(url, {
