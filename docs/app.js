@@ -146,6 +146,9 @@ function init() {
 
 async function onSignedIn() {
     showLoadingState(true);
+    // Hide sign-in overlay so loading overlay ("sup fucker") is visible
+    const signInOverlay = document.getElementById('sign-in-overlay');
+    if (signInOverlay) signInOverlay.classList.add('hidden');
     try {
         checks = await loadChecksFromSheet();
         sheetsReady = true;
@@ -157,7 +160,10 @@ async function onSignedIn() {
         refreshInterval = setInterval(refreshFromSheet, 30000);
     } catch (err) {
         console.error('Failed to load checks:', err);
-        showError('Load failed: ' + err.message);
+        const msg = (err.message && err.message.indexOf('Unauthorized') !== -1)
+            ? 'Not authorized — try another account'
+            : ('Load failed: ' + (err.message || 'unknown error'));
+        showError(msg);
         if (err.message && err.message.indexOf('Unauthorized') !== -1) {
             signOut();
         }

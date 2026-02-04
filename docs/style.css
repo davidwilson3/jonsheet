@@ -521,7 +521,7 @@ body {
     }
 }
 
-/* Error Toast */
+/* Error Toast (above sign-in overlay so it shows on auth failure) */
 .error-toast {
     position: fixed;
     bottom: 30px;
@@ -532,6 +532,6 @@ body {
     padding: 12px 24px;
     border-radius: 8px;
     font-size: 1rem;
-    z-index: 3000;
+    z-index: 5500;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
