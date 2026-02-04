@@ -145,11 +145,11 @@ function init() {
 }
 
 async function onSignedIn() {
+    showSignedInUI();
     showLoadingState(true);
     try {
         checks = await loadChecksFromSheet();
         sheetsReady = true;
-        showSignedInUI();
         render();
 
         // Start auto-refresh every 30 seconds
@@ -157,10 +157,7 @@ async function onSignedIn() {
         refreshInterval = setInterval(refreshFromSheet, 30000);
     } catch (err) {
         console.error('Failed to load checks:', err);
-        // Token is probably expired — clear it and show sign-in
-        localStorage.removeItem('jonsheet_token');
-        accessToken = null;
-        showSignedOutUI();
+        showError('Load failed: ' + err.message);
     } finally {
         showLoadingState(false);
     }
@@ -188,7 +185,7 @@ function onSignedOut() {
 }
 
 async function refreshFromSheet() {
-    if (!sheetsReady || !accessToken) return;
+    if (!sheetsReady || !idToken) return;
     try {
         checks = await loadChecksFromSheet();
         render();
