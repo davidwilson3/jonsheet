@@ -343,7 +343,7 @@ function render() {
                     toggleGameCheck(cellId);
                 };
             } else {
-                g.style.cursor = "default";
+                g.style.cursor = "not-allowed";
             }
         } else {
             g.style.cursor = "grab";
