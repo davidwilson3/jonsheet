@@ -145,11 +145,11 @@ function init() {
 }
 
 async function onSignedIn() {
+    showSignedInUI();
     showLoadingState(true);
     try {
         checks = await loadChecksFromSheet();
         sheetsReady = true;
-        showSignedInUI();
         render();
 
         // Start auto-refresh every 30 seconds
@@ -157,10 +157,7 @@ async function onSignedIn() {
         refreshInterval = setInterval(refreshFromSheet, 30000);
     } catch (err) {
         console.error('Failed to load checks:', err);
-        // Token is probably expired — clear it and show sign-in
-        localStorage.removeItem('jonsheet_token');
-        accessToken = null;
-        showSignedOutUI();
+        showError('Load failed: ' + err.message);
     } finally {
         showLoadingState(false);
     }
@@ -188,7 +185,7 @@ function onSignedOut() {
 }
 
 async function refreshFromSheet() {
-    if (!sheetsReady || !accessToken) return;
+    if (!sheetsReady || !idToken) return;
     try {
         checks = await loadChecksFromSheet();
         render();
@@ -197,11 +194,20 @@ async function refreshFromSheet() {
     }
 }
 
+function getUserColumn() {
+    const email = getCurrentUserEmail();
+    if (!email || !SHEETS_CONFIG.emailToColumn) return null;
+    return SHEETS_CONFIG.emailToColumn[email] || null;
+}
+
 async function toggleGameCheck(cellId) {
     const colId = cellId.split('_')[0];
     const colDef = COLUMN_DEFS.find(c => c.id === colId);
     if (colDef && !colDef.checkable) return;
     if (!sheetsReady) return;
+
+    const userCol = getUserColumn();
+    if (userCol && colId !== userCol) return;
 
     // Optimistic update
     const wasChecked = !!checks[cellId];
@@ -326,13 +332,19 @@ function render() {
         } else if (p.locked) {
             g.style.cursor = "default";
         } else if (isEditing && sheetsReady) {
-            g.style.cursor = "pointer";
-            g.onclick = (e) => {
-                e.stopPropagation();
-                const container = document.querySelector('.scroll-container');
-                if (container && container.classList.contains('active')) return;
-                toggleGameCheck(cellId);
-            };
+            const cellCol = cellId.split('_')[0];
+            const userCol = getUserColumn();
+            if (!userCol || cellCol === userCol) {
+                g.style.cursor = "pointer";
+                g.onclick = (e) => {
+                    e.stopPropagation();
+                    const container = document.querySelector('.scroll-container');
+                    if (container && container.classList.contains('active')) return;
+                    toggleGameCheck(cellId);
+                };
+            } else {
+                g.style.cursor = "not-allowed";
+            }
         } else {
             g.style.cursor = "grab";
         }
