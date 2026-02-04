@@ -145,11 +145,11 @@ function init() {
 }
 
 async function onSignedIn() {
-    showSignedInUI();
     showLoadingState(true);
     try {
         checks = await loadChecksFromSheet();
         sheetsReady = true;
+        showSignedInUI();
         render();
 
         // Start auto-refresh every 30 seconds
@@ -158,6 +158,9 @@ async function onSignedIn() {
     } catch (err) {
         console.error('Failed to load checks:', err);
         showError('Load failed: ' + err.message);
+        if (err.message && err.message.indexOf('Unauthorized') !== -1) {
+            signOut();
+        }
     } finally {
         showLoadingState(false);
     }
