@@ -1,4 +1,4 @@
-/* Jonsheet Styles */
+/* the jon sheet Styles */
 
 :root {
     --bg-color: #fdfaf6;
@@ -348,6 +348,16 @@ body {
     color: #2c3e50;
     font-weight: 700;
     line-height: 1.1;
+    white-space: nowrap;
+}
+
+.title-logo {
+    display: inline-block;
+    vertical-align: bottom;
+    height: 1.4em;
+    width: auto;
+    margin-left: -0.6em;
+    margin-bottom: -0.3em;
 }
 
 .sign-in-note {
@@ -499,6 +509,14 @@ body {
 
     .sign-out-link {
         font-size: 0.7rem;
+    }
+
+    .sign-in-content h1 {
+        white-space: normal;
+    }
+
+    .title-logo {
+        float: right;
     }
 }
 
