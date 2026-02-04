@@ -453,7 +453,7 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 3000;
+    z-index: 7000;
 }
 
 .loading-spinner {
@@ -532,6 +532,6 @@ body {
     padding: 12px 24px;
     border-radius: 8px;
     font-size: 1rem;
-    z-index: 5500;
+    z-index: 7500;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
