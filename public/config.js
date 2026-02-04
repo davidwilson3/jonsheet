@@ -8,12 +8,13 @@ const SHEETS_CONFIG = {
     scope: 'https://www.googleapis.com/auth/spreadsheets',
     dataRange: 'C2:H26',
     sheetUrl: 'https://docs.google.com/spreadsheets/d/1hBTvaqrfAOD28GQor6g1FyP6mUk_dAOoTJPMPb1t5Wg/edit',
-    homies: [
-        'conorbritain@gmail.com',
-        'clayton.winkelvoss@gmail.com',
-        'jharmsmahlandt@gmail.com',
-        'jayrome.lewis@gmail.com',
-        'yates.walt@gmail.com',
-        'davidrwilson3@gmail.com'
-    ]
+    emailToColumn: {
+        'conorbritain@gmail.com': 'connie',
+        'clayton.winkelvoss@gmail.com': 'winky',
+        'davidrwilson3@gmail.com': 'david',
+        'jharmsmahlandt@gmail.com': 'jhatz',
+        'jayrome.lewis@gmail.com': 'james',
+        'yates.walt@gmail.com': 'stud'
+    },
+    get homies() { return Object.keys(this.emailToColumn); }
 };

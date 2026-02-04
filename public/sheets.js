@@ -2,6 +2,25 @@
 
 let tokenClient = null;
 let accessToken = null;
+let currentUserEmail = null;
+
+function getCurrentUserEmail() {
+    return currentUserEmail;
+}
+
+async function fetchUserEmail() {
+    try {
+        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            currentUserEmail = data.email;
+        }
+    } catch (err) {
+        console.error('Failed to fetch user email:', err);
+    }
+}
 
 // Column mapping: column IDs to sheet columns (C=0, D=1, E=2, F=3, G=4, H=5)
 const COLUMN_MAP = {
@@ -44,8 +63,8 @@ function initAuth() {
 
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: SHEETS_CONFIG.clientId,
-        scope: SHEETS_CONFIG.scope,
-        callback: (response) => {
+        scope: SHEETS_CONFIG.scope + ' email',
+        callback: async (response) => {
             if (response.error) {
                 console.error('Auth error:', response.error);
                 showError('Sign-in failed: ' + response.error);
@@ -54,6 +73,7 @@ function initAuth() {
             }
             accessToken = response.access_token;
             localStorage.setItem('jonsheet_token', accessToken);
+            await fetchUserEmail();
             onSignedIn();
         },
     });
@@ -62,6 +82,7 @@ function initAuth() {
     const savedToken = localStorage.getItem('jonsheet_token');
     if (savedToken) {
         accessToken = savedToken;
+        fetchUserEmail();
         setTimeout(() => onSignedIn(), 400);
     } else {
         setTimeout(() => showSignedOutUI(), 400);
@@ -78,6 +99,7 @@ function signIn() {
 
 function signOut() {
     localStorage.removeItem('jonsheet_token');
+    currentUserEmail = null;
     if (accessToken) {
         google.accounts.oauth2.revoke(accessToken, () => {
             accessToken = null;
