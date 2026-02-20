@@ -182,7 +182,7 @@ function render() {
         g.setAttribute("transform", `translate(${p.x}, ${p.y})`);
 
         g.style.cursor = "default";
-        
+
         // Cell rect (invisible hitbox)
         const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
         rect.setAttribute("width", p.w);
@@ -193,23 +193,28 @@ function render() {
 
         // Checkmarks
         if (checks[cellId]) {
-            const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
+            // Only draw a check if the cell is not locked. 
+            // Locked cells already have checks permanently drawn onto the background image 
+            // and drawing over them creates double checks.
+            if (!p.locked) {
+                const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
 
-            const hash = cellId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-            const variant = (hash % 2) + 1;
-            img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', `check${variant}.png`);
-            img.style.display = 'block';
+                const hash = cellId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                const variant = (hash % 2) + 1;
+                img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', `check${variant}.png`);
+                img.style.display = 'block';
 
-            let size = 150;
-            // Center check
-            const centerX = p.w / 2;
-            const centerY = p.h / 2;
-            img.setAttribute("x", centerX - (size / 2));
-            img.setAttribute("y", centerY - (size / 2));
-            img.setAttribute("width", size);
-            img.setAttribute("height", size);
-            
-            g.appendChild(img);
+                let size = 150;
+                // Center check
+                const centerX = p.w / 2;
+                const centerY = p.h / 2;
+                img.setAttribute("x", centerX - (size / 2));
+                img.setAttribute("y", centerY - (size / 2));
+                img.setAttribute("width", size);
+                img.setAttribute("height", size);
+
+                g.appendChild(img);
+            }
         }
 
         svg.appendChild(g);
