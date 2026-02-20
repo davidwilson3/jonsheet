@@ -1,4 +1,4 @@
-// app.js - Core Game Logic
+// app.js - Core Game Logic (Static Version)
 
 const IMG_WIDTH = 4284;
 const IMG_HEIGHT = 5712;
@@ -14,12 +14,61 @@ const COLUMN_DEFS = [
     { id: 'notes', name: 'Notes', checkable: false }
 ];
 
-// State
-let checks = {};
-let sheetsReady = false;
+// Hardcoded checks from final state
+const checks = {
+    // Row 0
+    "connie_0": true, "winky_0": true, "david_0": true, "james_0": true, "stud_0": true, "jhatz_0": true,
+    // Row 1
+    "james_1": true, "jhatz_1": true,
+    // Row 2
+    "james_2": true, "jhatz_2": true,
+    // Row 3
+    "stud_3": true, "jhatz_3": true,
+    // Row 4
+    "james_4": true, "stud_4": true, "jhatz_4": true,
+    // Row 5
+    "james_5": true, "jhatz_5": true,
+    // Row 6
+    "james_6": true,
+    // Row 7
+    "james_7": true, "stud_7": true,
+    // Row 8
+    "james_8": true, "stud_8": true,
+    // Row 9
+    "david_9": true, "james_9": true, "stud_9": true,
+    // Row 10
+    "david_10": true, "james_10": true,
+    // Row 11
+    "david_11": true,
+    // Row 12
+    "david_12": true,
+    // Row 13
+    "james_13": true, "jhatz_13": true,
+    // Row 14
+    "david_14": true, "james_14": true, "stud_14": true, "jhatz_14": true,
+    // Row 15
+    "david_15": true, "james_15": true, "stud_15": true, "jhatz_15": true,
+    // Row 16
+    "david_16": true, "james_16": true, "stud_16": true,
+    // Row 17
+    "david_17": true, "james_17": true, "stud_17": true,
+    // Row 18
+    "david_18": true, "james_18": true, "jhatz_18": true,
+    // Row 19
+    "david_19": true, "jhatz_19": true,
+    // Row 20
+    "stud_20": true,
+    // Row 21
+    "james_21": true, "jhatz_21": true,
+    // Row 22
+    "david_22": true, "james_22": true, "jhatz_22": true,
+    // Row 23
+    "david_23": true, "james_23": true, "jhatz_23": true,
+    // Row 24
+    "david_24": true, "james_24": true, "jhatz_24": true
+};
+
 let cellParams = {};
-let isEditing = false;
-let refreshInterval = null;
 
 // Zoom
 let currentZoom = 1.0;
@@ -27,39 +76,6 @@ const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 5.0;
 
 function init() {
-    const modal = document.getElementById('welcome-modal');
-    const btnClose = document.getElementById('btn-close-modal');
-    const btnEdit = document.getElementById('btn-edit-mode');
-    const modeIndicator = document.getElementById('mode-indicator');
-
-    if (btnEdit && modal && btnClose) {
-        btnEdit.addEventListener('click', () => {
-            if (!sheetsReady) {
-                showError('Sign in with Google first.');
-                return;
-            }
-
-            if (isEditing) {
-                isEditing = false;
-                btnEdit.textContent = "switch to edit";
-                btnEdit.classList.remove('active');
-                if (modeIndicator) modeIndicator.textContent = "view mode";
-                render();
-            } else {
-                modal.classList.remove('hidden');
-            }
-        });
-
-        btnClose.addEventListener('click', () => {
-            modal.classList.add('hidden');
-            isEditing = true;
-            btnEdit.textContent = "switch to view";
-            btnEdit.classList.add('active');
-            if (modeIndicator) modeIndicator.textContent = "edit mode";
-            render();
-        });
-    }
-
     // Zoom (trackpad pinch)
     const container = document.querySelector('.scroll-container');
     if (container) {
@@ -76,8 +92,6 @@ function init() {
 
         container.addEventListener('mousedown', (e) => {
             if (e.defaultPrevented) return;
-            if (window.isEditMode && e.target.closest('g')) return;
-
             isPanning = false;
             startX = e.pageX - container.offsetLeft;
             startY = e.pageY - container.offsetTop;
@@ -125,160 +139,7 @@ function init() {
         cellParams = createDefaultParams();
     }
 
-    // Update jump-to-sheet link
-    const jumpLink = document.getElementById('jump-sheet');
-    if (jumpLink && typeof SHEETS_CONFIG !== 'undefined') {
-        jumpLink.href = SHEETS_CONFIG.sheetUrl;
-    }
-
-    // Populate homies list on sign-in page
-    const homiesList = document.getElementById('homies-list');
-    if (homiesList && typeof SHEETS_CONFIG !== 'undefined' && SHEETS_CONFIG.homies) {
-        homiesList.innerHTML = '<div class="homies-label">homies who can see this:</div>' +
-            '<ul>' + SHEETS_CONFIG.homies.map(e => `<li>${e}</li>`).join('') + '</ul>';
-    }
-
     render();
-
-    // Initialize Google auth
-    initAuth();
-}
-
-async function onSignedIn() {
-    showLoadingState(true);
-    // Hide sign-in overlay so loading overlay ("sup fucker") is visible
-    const signInOverlay = document.getElementById('sign-in-overlay');
-    if (signInOverlay) signInOverlay.classList.add('hidden');
-    try {
-        checks = await loadChecksFromSheet();
-        sheetsReady = true;
-        showSignedInUI();
-        render();
-
-        // Start auto-refresh every 30 seconds
-        if (refreshInterval) clearInterval(refreshInterval);
-        refreshInterval = setInterval(refreshFromSheet, 30000);
-    } catch (err) {
-        console.error('Failed to load checks:', err);
-        const msg = (err.message && err.message.indexOf('Unauthorized') !== -1)
-            ? 'Not authorized — try another account'
-            : ('Load failed: ' + (err.message || 'unknown error'));
-        showError(msg);
-        if (err.message && err.message.indexOf('Unauthorized') !== -1) {
-            signOut();
-        }
-    } finally {
-        showLoadingState(false);
-    }
-}
-
-function onSignedOut() {
-    sheetsReady = false;
-    checks = {};
-    isEditing = false;
-    if (refreshInterval) {
-        clearInterval(refreshInterval);
-        refreshInterval = null;
-    }
-
-    const btnEdit = document.getElementById('btn-edit-mode');
-    const modeIndicator = document.getElementById('mode-indicator');
-    if (btnEdit) {
-        btnEdit.textContent = "switch to edit";
-        btnEdit.classList.remove('active');
-    }
-    if (modeIndicator) modeIndicator.textContent = "view mode";
-
-    showSignedOutUI();
-    render();
-}
-
-async function refreshFromSheet() {
-    if (!sheetsReady || !idToken) return;
-    try {
-        checks = await loadChecksFromSheet();
-        render();
-    } catch (err) {
-        console.error('Refresh failed:', err);
-    }
-}
-
-function getUserColumn() {
-    const email = getCurrentUserEmail();
-    if (!email || !SHEETS_CONFIG.emailToColumn) return null;
-    return SHEETS_CONFIG.emailToColumn[email] || null;
-}
-
-async function toggleGameCheck(cellId) {
-    const colId = cellId.split('_')[0];
-    const colDef = COLUMN_DEFS.find(c => c.id === colId);
-    if (colDef && !colDef.checkable) return;
-    if (!sheetsReady) return;
-
-    const userCol = getUserColumn();
-    if (userCol && colId !== userCol) return;
-
-    // Optimistic update
-    const wasChecked = !!checks[cellId];
-    if (wasChecked) {
-        delete checks[cellId];
-    } else {
-        checks[cellId] = true;
-    }
-    render();
-
-    // Write to sheet
-    try {
-        await writeCheckToSheet(cellId, !wasChecked);
-    } catch (err) {
-        console.error('Failed to write check:', err);
-        showError('Failed to save. Rolling back...');
-        // Rollback
-        if (wasChecked) {
-            checks[cellId] = true;
-        } else {
-            delete checks[cellId];
-        }
-        render();
-    }
-}
-
-function showLoadingState(show) {
-    const overlay = document.getElementById('loading-overlay');
-    if (overlay) {
-        overlay.classList.toggle('hidden', !show);
-    }
-}
-
-function showError(msg) {
-    const toast = document.getElementById('error-toast');
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), 4000);
-}
-
-function hideStartupOverlay() {
-    const startup = document.getElementById('startup-overlay');
-    if (startup) startup.classList.add('hidden');
-}
-
-function showSignedInUI() {
-    hideStartupOverlay();
-    const overlay = document.getElementById('sign-in-overlay');
-    const userInfo = document.getElementById('user-info');
-
-    if (overlay) overlay.classList.add('hidden');
-    if (userInfo) userInfo.classList.remove('hidden');
-}
-
-function showSignedOutUI() {
-    hideStartupOverlay();
-    const overlay = document.getElementById('sign-in-overlay');
-    const userInfo = document.getElementById('user-info');
-
-    if (overlay) overlay.classList.remove('hidden');
-    if (userInfo) userInfo.classList.add('hidden');
 }
 
 function applyZoom(delta) {
@@ -314,144 +175,46 @@ function render() {
     if (!svg) return;
     svg.innerHTML = '';
 
-    // Fallback: sync state from DOM if inconsistent
-    const btnEdit = document.getElementById('btn-edit-mode');
-    if (!isEditing && btnEdit && btnEdit.classList.contains('active')) {
-        isEditing = true;
-    }
-
-    const adminEditing = (typeof isEditMode !== 'undefined' && isEditMode);
-
     Object.keys(cellParams).forEach(cellId => {
         const p = cellParams[cellId];
         const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
         g.dataset.id = cellId;
         g.setAttribute("transform", `translate(${p.x}, ${p.y})`);
 
-        // Interaction
-        if (adminEditing) {
-            g.style.cursor = "move";
-            g.onmousedown = (e) => { if (window.startDrag) window.startDrag(e, cellId); };
-            g.ontouchstart = (e) => { if (window.startDrag) window.startDrag(e, cellId); };
-            g.oncontextmenu = (e) => {
-                e.preventDefault();
-                if (window.toggleLock) window.toggleLock(cellId);
-            };
-            g.onclick = (e) => { if (window.onCellClick) window.onCellClick(cellId); };
-        } else if (p.locked) {
-            g.style.cursor = "default";
-        } else if (isEditing && sheetsReady) {
-            const cellCol = cellId.split('_')[0];
-            const userCol = getUserColumn();
-            if (!userCol || cellCol === userCol) {
-                g.style.cursor = "pointer";
-                g.onclick = (e) => {
-                    e.stopPropagation();
-                    const container = document.querySelector('.scroll-container');
-                    if (container && container.classList.contains('active')) return;
-                    toggleGameCheck(cellId);
-                };
-            } else {
-                g.style.cursor = "not-allowed";
-            }
-        } else {
-            g.style.cursor = "grab";
-        }
+        g.style.cursor = "default";
 
-        // Cell rect
+        // Cell rect (invisible hitbox)
         const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
         rect.setAttribute("width", p.w);
         rect.setAttribute("height", p.h);
-
-        if (adminEditing) {
-            let stroke = "cyan";
-            let fill = "rgba(0, 255, 255, 0.2)";
-
-            if (p.locked) {
-                if (checks[cellId]) {
-                    stroke = "#2ecc71";
-                    fill = "rgba(46, 204, 113, 0.3)";
-                } else {
-                    stroke = "#e74c3c";
-                    fill = "rgba(231, 76, 60, 0.3)";
-                }
-            }
-
-            rect.setAttribute("fill", fill);
-            rect.setAttribute("stroke", stroke);
-            rect.setAttribute("stroke-dasharray", "5,5");
-        } else {
-            // Invisible hitbox (fill with 0 opacity to capture clicks)
-            rect.setAttribute("fill", "white");
-            rect.setAttribute("fill-opacity", "0");
-        }
+        rect.setAttribute("fill", "white");
+        rect.setAttribute("fill-opacity", "0");
         g.appendChild(rect);
 
         // Checkmarks
-        const colId = cellId.split('_')[0];
-        const colDef = COLUMN_DEFS.find(c => c.id === colId);
-        const isCheckable = colDef ? colDef.checkable : false;
+        if (checks[cellId]) {
+            // Only draw a check if the cell is not locked. 
+            // Locked cells already have checks permanently drawn onto the background image 
+            // and drawing over them creates double checks.
+            if (!p.locked) {
+                const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
 
-        let showCheck = false;
-        let isPermanent = false;
-        let isGhost = false;
+                const hash = cellId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                const variant = (hash % 2) + 1;
+                img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', `check${variant}.png`);
+                img.style.display = 'block';
 
-        if (adminEditing) {
-            if (p.locked && checks[cellId]) {
-                showCheck = true;
-                isPermanent = true;
-            } else if (!p.locked && isCheckable) {
-                showCheck = true;
-                if (!checks[cellId]) isGhost = true;
+                let size = 150;
+                // Center check
+                const centerX = p.w / 2;
+                const centerY = p.h / 2;
+                img.setAttribute("x", centerX - (size / 2));
+                img.setAttribute("y", centerY - (size / 2));
+                img.setAttribute("width", size);
+                img.setAttribute("height", size);
+
+                g.appendChild(img);
             }
-        } else {
-            if (p.isPermanent) {
-                showCheck = true;
-                isPermanent = true;
-            } else if (!p.locked && checks[cellId]) {
-                showCheck = true;
-            }
-        }
-
-        if (showCheck) {
-            const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
-
-            const hash = cellId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-            const variant = (hash % 2) + 1;
-            img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', `check${variant}.png`);
-            img.style.display = 'block';
-
-            let size = 150;
-            if (typeof GRID_CONFIG !== 'undefined' && GRID_CONFIG.checkSize) {
-                size = GRID_CONFIG.checkSize;
-            }
-            if (adminEditing) {
-                const slider = document.getElementById('slider-size');
-                if (slider) size = parseInt(slider.value) || size;
-            }
-
-            const centerX = p.w / 2;
-            const centerY = p.h / 2;
-            img.setAttribute("x", centerX - (size / 2));
-            img.setAttribute("y", centerY - (size / 2));
-            img.setAttribute("width", size);
-            img.setAttribute("height", size);
-            img.style.opacity = isGhost ? "0.7" : "1.0";
-
-            g.appendChild(img);
-        }
-
-        // Lock icon (admin only, locked + unchecked)
-        if (adminEditing && p.locked && !checks[cellId]) {
-            const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-            text.textContent = "\uD83D\uDD12";
-            text.setAttribute("x", p.w / 2);
-            text.setAttribute("y", p.h / 2);
-            text.setAttribute("dominant-baseline", "central");
-            text.setAttribute("text-anchor", "middle");
-            text.setAttribute("font-size", Math.min(p.w, p.h) * 0.5);
-            text.style.pointerEvents = "none";
-            g.appendChild(text);
         }
 
         svg.appendChild(g);
